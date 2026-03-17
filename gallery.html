@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gallery — Ghost Book</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #222536;
+      --border: #2e3147; --accent: #7c3aed; --accent-dark: #6d28d9;
+      --accent2: #22d3ee; --green: #34d399; --amber: #fbbf24;
+      --red: #f87171; --text: #e2e8f0; --muted: #94a3b8; --dim: #64748b;
+      --radius: 12px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; -webkit-font-smoothing: antialiased;
+    }
+
+    .app-bar {
+      background: var(--accent-dark); padding: 10px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .app-bar h1 { font-size: 15px; font-weight: 800; color: #fff; }
+    .chapter-count {
+      font-size: 12px; font-weight: 700; color: rgba(255,255,255,.6);
+      background: rgba(255,255,255,.12); padding: 4px 10px; border-radius: 20px;
+    }
+
+    main { padding: 16px; max-width: 600px; margin: 0 auto; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    /* Waiting state */
+    .waiting-state {
+      text-align: center; padding: 40px 20px; color: var(--muted);
+    }
+    .waiting-icon { font-size: 48px; margin-bottom: 12px; }
+    .waiting-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .waiting-text { font-size: 13px; line-height: 1.6; }
+    .pulse-ring {
+      display: inline-block; width: 12px; height: 12px;
+      border-radius: 50%; background: var(--accent);
+      animation: pulse 1.5s ease infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+    /* Chapter cards */
+    .chapter-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .chapter-header {
+      padding: 14px 16px; display: flex; align-items: center;
+      justify-content: space-between; border-bottom: 1px solid var(--border);
+    }
+    .chapter-label {
+      font-size: 11px; font-weight: 700; color: var(--dim);
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .chapter-name {
+      font-size: 16px; font-weight: 800; color: var(--accent2);
+      letter-spacing: -.02em;
+    }
+    .chapter-body { padding: 16px; }
+    .chapter-story {
+      font-size: 13px; line-height: 1.7; color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .image-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .image-slot {
+      aspect-ratio: 1; border-radius: 8px; overflow: hidden;
+      background: var(--surface2); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .image-slot img {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .image-slot .placeholder {
+      text-align: center; color: var(--dim); font-size: 11px;
+    }
+    .image-slot .placeholder .icon { font-size: 24px; display: block; margin-bottom: 4px; }
+    .image-slot .generating {
+      text-align: center; color: var(--accent);
+    }
+    .image-slot .generating .spinner {
+      display: inline-block; width: 20px; height: 20px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .image-slot .generating .gen-text {
+      display: block; font-size: 10px; margin-top: 4px; color: var(--muted);
+    }
+    .gen-btn {
+      width: 100%; padding: 10px; background: var(--accent); color: #fff;
+      border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
+      cursor: pointer; margin-top: 10px; transition: opacity .15s;
+    }
+    .gen-btn:hover { opacity: .9; }
+    .gen-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* Export section */
+    .export-section {
+      display: none; text-align: center;
+    }
+    .export-section.show { display: block; }
+    .btn-export {
+      width: 100%; padding: 14px; background: var(--green); color: var(--bg);
+      border: none; border-radius: 8px; font-size: 15px; font-weight: 800;
+      cursor: pointer; transition: opacity .15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-export:hover { opacity: .9; }
+    .btn-export:disabled { opacity: .4; cursor: not-allowed; }
+
+    .loader { display: none; text-align: center; padding: 20px; }
+    .loader.show { display: block; }
+    .loader-dots { display: inline-flex; gap: 6px; }
+    .loader-dots span {
+      width: 8px; height: 8px; background: var(--accent);
+      border-radius: 50%; animation: bounce .6s infinite alternate;
+    }
+    .loader-dots span:nth-child(2) { animation-delay: .2s; }
+    .loader-dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { to { transform: translateY(-6px); opacity: .4; } }
+    .loader-text { margin-top: 6px; font-size: 11px; color: var(--muted); }
+
+    .error-msg {
+      display: none; background: rgba(248,113,113,.1);
+      border: 1px solid rgba(248,113,113,.3); color: var(--red);
+      border-radius: 8px; padding: 10px; font-size: 13px; margin-bottom: 12px;
+    }
+    .error-msg.show { display: block; }
+
+    .soft-warning {
+      display: none; background: rgba(251,191,36,.1);
+      border: 1px solid rgba(251,191,36,.3); color: var(--amber);
+      border-radius: 8px; padding: 8px; font-size: 12px;
+      text-align: center; margin-bottom: 12px;
+    }
+    .soft-warning.show { display: block; }
+
+    .model-picker { display: flex; gap: 6px; margin-bottom: 12px; }
+    .model-opt {
+      flex: 1; padding: 8px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--muted); font-size: 12px; font-weight: 600;
+      cursor: pointer; text-align: center; transition: all .15s;
+    }
+    .model-opt.active {
+      border-color: var(--accent2); color: var(--accent2);
+      background: rgba(34,211,238,.08);
+    }
+
+    .demo-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(15,17,23,.92); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .demo-overlay.show { display: flex; }
+    .demo-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 2rem; max-width: 380px;
+      width: 90%; text-align: center;
+    }
+    .demo-box h2 { font-size: 1.1rem; margin-bottom: .4rem; }
+    .demo-box p { font-size: .85rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+<div class="app-bar">
+  <h1>Gallery</h1>
+  <span class="chapter-count" id="chapterCount">0 / 3 chapters</span>
+</div>
+
+<main>
+  <!-- Waiting state -->
+  <div class="waiting-state" id="waitingState">
+    <div class="waiting-icon">&#x1f3a8;</div>
+    <div class="waiting-title">Waiting for Stories...</div>
+    <div class="waiting-text">
+      <span class="pulse-ring"></span><br><br>
+      The Story Forge on the left will send chapters here as they're created.
+      Each chapter gets two AI-generated images — one for the character and one for the scene.
+    </div>
+  </div>
+
+  <!-- Model picker (for image gen) -->
+  <div class="card" id="settingsCard" style="display:none;">
+    <div class="card-title">&#x2699;&#xfe0f; Image Settings</div>
+    <label for="galleryModel">AI Model for Images</label>
+    <div class="model-picker" id="galleryModelPicker">
+      <button type="button" class="model-opt active" data-model="gemini">&#x2728; Gemini</button>
+      <button type="button" class="model-opt" data-model="claude">&#x1f9e0; Claude</button>
+    </div>
+    <div class="soft-warning" id="softWarning"></div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <!-- Chapters will be appended here -->
+  <div id="chaptersContainer"></div>
+
+  <!-- Export -->
+  <div class="export-section" id="exportSection">
+    <div class="card">
+      <div class="card-title">&#x1f4da; Your Ghost Book is Ready</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">
+        All 3 chapters and their illustrations are complete. Export creates a beautiful
+        standalone HTML storybook page you can save and share.
+      </p>
+      <div class="loader" id="exportLoader">
+        <div class="loader-dots"><span></span><span></span><span></span></div>
+        <div class="loader-text">AI is weaving your storybook...</div>
+      </div>
+      <button class="btn-export" id="exportBtn">&#x1f4d6; Export HTML Storybook</button>
+    </div>
+  </div>
+</main>
+
+<!-- Demo Overlay -->
+<div class="demo-overlay" id="demoOverlay">
+  <div class="demo-box">
+    <h2>&#x1f680; Demo Limit Reached</h2>
+    <p>You've used all 50 free AI calls for today.</p>
+    <a href="https://appsforhire.app/#contact" class="btn-export" style="text-decoration:none;display:inline-flex;">Get Your Own App</a>
+    <br><br>
+    <a href="#" id="dismissOverlay" style="color:var(--accent2);font-size:.85rem;">Dismiss</a>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   GALLERY — Right-side app for Ghost Book split view
+   Receives chapters from Story Forge, generates images for each,
+   then exports everything as a standalone HTML storybook via AI.
+   ════════════════════════════════════════════════════════════════ */
+
+const WORKER_URL = 'https://worker.appsforhire.app/ai';
+const IMAGE_URL  = 'https://worker.appsforhire.app/ai-image';
+const bc = new BroadcastChannel('ghostbook-sync');
+
+let selectedModel = 'gemini';
+const receivedChapters = []; // { chapter, name, story, genre, mood, nameImg, storyImg }
+let allSent = false;
+
+// ── Model Picker ──
+document.querySelectorAll('#galleryModelPicker .model-opt').forEach(opt => {
+  opt.addEventListener('click', () => {
+    selectedModel = opt.dataset.model;
+    document.querySelectorAll('#galleryModelPicker .model-opt').forEach(o =>
+      o.classList.toggle('active', o.dataset.model === selectedModel)
+    );
+  });
+});
+
+// ── AI Calls ──
+async function callAI(model, system, message) {
+  const res = await fetch(WORKER_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, system, message }),
+  });
+  const data = await res.json();
+  if (res.status === 429) {
+    document.getElementById('demoOverlay').classList.add('show');
+    return null;
+  }
+  checkRemaining(data);
+  if (!res.ok) throw new Error(data.error || 'AI error');
+  return data.response;
+}
+
+async function generateImage(prompt) {
+  const res = await fetch(IMAGE_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await res.json();
+  if (res.status === 429) {
+    document.getElementById('demoOverlay').classList.add('show');
+    return null;
+  }
+  checkRemaining(data);
+  if (!res.ok) throw new Error(data.error || 'Image generation failed');
+  return `data:${data.mimeType};base64,${data.image}`;
+}
+
+function checkRemaining(data) {
+  if (data.remaining != null && data.remaining <= 2) {
+    const el = document.getElementById('softWarning');
+    el.textContent = '\u26a0\ufe0f ' + data.remaining + ' AI call' + (data.remaining === 1 ? '' : 's') + ' remaining.';
+    el.classList.add('show');
+  }
+}
+
+// ── Receive chapters from Story Forge ──
+bc.onmessage = (event) => {
+  const msg = event.data;
+
+  if (msg.type === 'NEW_CHAPTER') {
+    const ch = msg.payload;
+    receivedChapters.push({
+      chapter: ch.chapter,
+      name: ch.name,
+      story: ch.story,
+      genre: ch.genre || '',
+      setting: ch.setting || '',
+      mood: ch.mood || '',
+      nameImg: null,
+      storyImg: null,
+    });
+
+    document.getElementById('waitingState').style.display = 'none';
+    document.getElementById('settingsCard').style.display = '';
+    document.getElementById('chapterCount').textContent = receivedChapters.length + ' / 3 chapters';
+
+    renderChapterCard(receivedChapters.length - 1);
+  }
+
+  if (msg.type === 'ALL_CHAPTERS_SENT') {
+    allSent = true;
+    document.getElementById('chapterCount').textContent = '3 / 3 chapters';
+    checkExportReady();
+  }
+};
+
+// ── Render a chapter card ──
+function renderChapterCard(idx) {
+  const ch = receivedChapters[idx];
+  const container = document.getElementById('chaptersContainer');
+
+  const card = document.createElement('div');
+  card.className = 'chapter-card';
+  card.id = 'chapterCard' + idx;
+  card.innerHTML = `
+    <div class="chapter-header">
+      <div>
+        <div class="chapter-label">Chapter ${ch.chapter}</div>
+        <div class="chapter-name">${escHtml(ch.name)}</div>
+      </div>
+    </div>
+    <div class="chapter-body">
+      <div class="chapter-story">${escHtml(ch.story)}</div>
+      <div class="image-grid">
+        <div class="image-slot" id="nameImg${idx}">
+          <div class="placeholder"><span class="icon">&#x1f464;</span>Character</div>
+        </div>
+        <div class="image-slot" id="storyImg${idx}">
+          <div class="placeholder"><span class="icon">&#x1f5bc;&#xfe0f;</span>Scene</div>
+        </div>
+      </div>
+      <button class="gen-btn" id="genBtn${idx}" onclick="generateImages(${idx})">
+        &#x1f3a8; Generate Images
+      </button>
+    </div>
+  `;
+  container.appendChild(card);
+}
+
+// ── Generate images for a chapter ──
+async function generateImages(idx) {
+  const ch = receivedChapters[idx];
+  const btn = document.getElementById('genBtn' + idx);
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+
+  const nameSlot  = document.getElementById('nameImg' + idx);
+  const storySlot = document.getElementById('storyImg' + idx);
+
+  // Show spinners
+  nameSlot.innerHTML = '<div class="generating"><div class="spinner"></div><span class="gen-text">Character...</span></div>';
+  storySlot.innerHTML = '<div class="generating"><div class="spinner"></div><span class="gen-text">Scene...</span></div>';
+
+  // Generate character portrait
+  try {
+    const namePrompt = `Gothic fantasy character portrait: "${ch.name}". ${ch.mood} mood. Dark, atmospheric digital art style. No text.`;
+    const nameDataUrl = await generateImage(namePrompt);
+    if (nameDataUrl) {
+      ch.nameImg = nameDataUrl;
+      nameSlot.innerHTML = `<img src="${nameDataUrl}" alt="${escHtml(ch.name)} portrait" />`;
+    } else {
+      nameSlot.innerHTML = '<div class="placeholder"><span class="icon">&#x26a0;&#xfe0f;</span>Rate limited</div>';
+    }
+  } catch (e) {
+    nameSlot.innerHTML = '<div class="placeholder"><span class="icon">&#x26a0;&#xfe0f;</span>' + escHtml(e.message).substring(0, 30) + '</div>';
+  }
+
+  // Generate scene
+  try {
+    const scenePrompt = `Gothic fantasy scene illustration for story: "${ch.story.substring(0, 200)}". ${ch.genre}, ${ch.mood} mood. Dark atmospheric landscape. No text.`;
+    const storyDataUrl = await generateImage(scenePrompt);
+    if (storyDataUrl) {
+      ch.storyImg = storyDataUrl;
+      storySlot.innerHTML = `<img src="${storyDataUrl}" alt="${escHtml(ch.name)} scene" />`;
+    } else {
+      storySlot.innerHTML = '<div class="placeholder"><span class="icon">&#x26a0;&#xfe0f;</span>Rate limited</div>';
+    }
+  } catch (e) {
+    storySlot.innerHTML = '<div class="placeholder"><span class="icon">&#x26a0;&#xfe0f;</span>' + escHtml(e.message).substring(0, 30) + '</div>';
+  }
+
+  btn.textContent = '\u2705 Images Done';
+  btn.disabled = true;
+  checkExportReady();
+}
+
+// ── Check if export is ready ──
+function checkExportReady() {
+  if (!allSent) return;
+  // Export available once all 3 chapters received (images optional)
+  if (receivedChapters.length >= 3) {
+    document.getElementById('exportSection').classList.add('show');
+  }
+}
+
+// ── Export HTML Storybook ──
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('exportBtn');
+  const loader = document.getElementById('exportLoader');
+  btn.disabled = true;
+  loader.classList.add('show');
+
+  // Build a summary for AI to weave together
+  let summary = 'Here are 3 ghost story chapters for a storybook called "Ghost Book". ';
+  summary += 'Please write a short introduction paragraph and a brief epilogue that ties them together. ';
+  summary += 'Return ONLY in this format:\nINTRO: [your intro paragraph]\nEPILOGUE: [your epilogue paragraph]\n\n';
+
+  receivedChapters.forEach((ch, i) => {
+    summary += `Chapter ${i + 1} — "${ch.name}":\n${ch.story}\n\n`;
+  });
+
+  let intro = 'Welcome to the Ghost Book — a collection of three haunted tales from the spaces between worlds.';
+  let epilogue = 'And so the stories end... but the ghosts linger, waiting for the next reader brave enough to turn the page.';
+
+  try {
+    const result = await callAI(selectedModel,
+      'You are a gothic storyteller. Write a short storybook intro and epilogue to tie three chapters together. Be atmospheric and brief (2-3 sentences each).',
+      summary
+    );
+    if (result) {
+      const introMatch = result.match(/INTRO:\s*(.+?)(?=EPILOGUE:|$)/s);
+      const epilogueMatch = result.match(/EPILOGUE:\s*(.+)/s);
+      if (introMatch) intro = introMatch[1].trim();
+      if (epilogueMatch) epilogue = epilogueMatch[1].trim();
+    }
+  } catch (e) {
+    // Use defaults — not critical
+  }
+
+  // Build the storybook HTML
+  const html = buildStorybookHTML(intro, epilogue);
+
+  // Download it
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ghost-book.html';
+  a.click();
+  URL.revokeObjectURL(url);
+
+  loader.classList.remove('show');
+  btn.innerHTML = '&#x2705; Downloaded! Export Again?';
+  btn.disabled = false;
+});
+
+function buildStorybookHTML(intro, epilogue) {
+  let chaptersHTML = '';
+  receivedChapters.forEach((ch, i) => {
+    const imgs = [];
+    if (ch.nameImg) imgs.push(`<img src="${ch.nameImg}" alt="${escHtml(ch.name)}" style="width:100%;max-width:300px;border-radius:12px;margin:12px auto;display:block;" />`);
+    if (ch.storyImg) imgs.push(`<img src="${ch.storyImg}" alt="${escHtml(ch.name)} scene" style="width:100%;max-width:300px;border-radius:12px;margin:12px auto;display:block;" />`);
+
+    chaptersHTML += `
+      <section style="margin-bottom:3rem;">
+        <h2 style="color:#a78bfa;font-size:1.4rem;margin-bottom:.3rem;">Chapter ${i + 1}</h2>
+        <h3 style="color:#22d3ee;font-size:1.8rem;font-weight:800;margin-bottom:1rem;letter-spacing:-.02em;">${escHtml(ch.name)}</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-bottom:1rem;">
+          ${imgs.join('')}
+        </div>
+        <p style="font-size:1rem;line-height:1.8;color:#cbd5e1;white-space:pre-wrap;">${escHtml(ch.story)}</p>
+      </section>
+    `;
+  });
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ghost Book</title>
+  <style>
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #0f1117; color: #e2e8f0;
+      max-width: 700px; margin: 0 auto; padding: 2rem 1.5rem;
+      line-height: 1.7;
+    }
+    h1 { text-align: center; font-size: 2.5rem; color: #a78bfa; margin-bottom: .5rem; }
+    .subtitle { text-align: center; font-size: 1rem; color: #64748b; margin-bottom: 2rem; }
+    .intro, .epilogue {
+      font-style: italic; color: #94a3b8; text-align: center;
+      max-width: 500px; margin: 0 auto 2.5rem; line-height: 1.8;
+      border-left: 3px solid #7c3aed; padding-left: 1rem; text-align: left;
+    }
+    hr { border: none; border-top: 1px solid #2e3147; margin: 2rem 0; }
+    .footer { text-align: center; margin-top: 3rem; font-size: .8rem; color: #475569; }
+    .footer a { color: #22d3ee; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <h1>&#x1f47b; Ghost Book</h1>
+  <div class="subtitle">A collection of haunted tales</div>
+
+  <div class="intro">${escHtml(intro)}</div>
+  <hr />
+
+  ${chaptersHTML}
+
+  <hr />
+  <div class="epilogue">${escHtml(epilogue)}</div>
+
+  <div class="footer">
+    Generated by <a href="https://appsforhire.app" target="_blank">AppsForHire</a> &middot; Ghost Book Split View
+  </div>
+</body>
+</html>`;
+}
+
+function escHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+document.getElementById('dismissOverlay').addEventListener('click', e => {
+  e.preventDefault();
+  document.getElementById('demoOverlay').classList.remove('show');
+});
+</script>
+</body>
+</html>
