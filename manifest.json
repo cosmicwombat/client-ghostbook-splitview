@@ -1,0 +1,14 @@
+{
+  "name": "Ghost Book",
+  "short_name": "Ghost Book",
+  "description": "AI-powered split view storybook generator — ghost stories, D&D adventures, and haunted kitchen tales.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#7c3aed",
+  "orientation": "any",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
