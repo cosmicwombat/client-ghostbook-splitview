@@ -179,6 +179,82 @@
     }
     .demo-box h2 { font-size: 1.1rem; margin-bottom: .4rem; }
     .demo-box p { font-size: .85rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
+
+    /* ElevenLabs API key input */
+    .api-key-row {
+      display: flex; gap: 8px; align-items: center; margin-top: 10px;
+    }
+    .api-key-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .api-key-input {
+      flex: 1; padding: 7px 10px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-size: 12px; font-family: monospace;
+    }
+    .api-key-input::placeholder { color: var(--dim); }
+
+    /* Read Aloud button */
+    .btn-read-aloud {
+      width: 100%; padding: 14px; background: var(--accent); color: #fff;
+      border: none; border-radius: 8px; font-size: 15px; font-weight: 800;
+      cursor: pointer; transition: opacity .15s; margin-top: 10px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-read-aloud:hover { opacity: .9; }
+    .btn-read-aloud:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* Slideshow overlay */
+    .slideshow-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(10,12,18,.97); z-index: 300;
+      flex-direction: column; align-items: center; justify-content: center;
+    }
+    .slideshow-overlay.show { display: flex; }
+    .slideshow-close {
+      position: absolute; top: 16px; right: 20px;
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      color: #fff; border-radius: 50%; width: 36px; height: 36px;
+      font-size: 18px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; transition: background .15s;
+    }
+    .slideshow-close:hover { background: rgba(255,255,255,.2); }
+    .slideshow-chapter-label {
+      font-size: 13px; font-weight: 700; color: var(--dim);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px;
+    }
+    .slideshow-name {
+      font-size: 22px; font-weight: 800; color: var(--accent2);
+      letter-spacing: -.02em; margin-bottom: 16px; text-align: center;
+    }
+    .slideshow-image-wrap {
+      width: 90vw; max-width: 520px; aspect-ratio: 1;
+      border-radius: 16px; overflow: hidden;
+      background: var(--surface); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px; position: relative;
+    }
+    .slideshow-image-wrap img {
+      width: 100%; height: 100%; object-fit: cover;
+      transition: opacity .6s ease;
+    }
+    .slideshow-image-wrap .no-image {
+      color: var(--dim); font-size: 14px; text-align: center;
+    }
+    .slideshow-caption {
+      font-size: 12px; color: var(--muted); margin-bottom: 12px;
+    }
+    .slideshow-progress {
+      display: flex; gap: 8px; margin-bottom: 16px;
+    }
+    .slideshow-progress .pip {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--border); transition: background .3s;
+    }
+    .slideshow-progress .pip.active { background: var(--accent); }
+    .slideshow-progress .pip.done { background: var(--green); }
+    .slideshow-narration-status {
+      font-size: 12px; color: var(--muted); text-align: center;
+      min-height: 18px;
+    }
   </style>
 </head>
 <body>
@@ -208,6 +284,11 @@
       <button type="button" class="model-opt active" data-model="gemini">&#x2728; Gemini</button>
       <button type="button" class="model-opt" data-model="claude">&#x1f9e0; Claude</button>
     </div>
+    <div class="api-key-row">
+      <label for="elevenKey">🔊 ElevenLabs Key</label>
+      <input type="password" class="api-key-input" id="elevenKey"
+        placeholder="sk_... (for Read Aloud)" autocomplete="off" />
+    </div>
     <div class="soft-warning" id="softWarning"></div>
     <div class="error-msg" id="errorMsg"></div>
   </div>
@@ -228,9 +309,24 @@
         <div class="loader-text">AI is weaving your storybook...</div>
       </div>
       <button class="btn-export" id="exportBtn">&#x1f4d6; Export HTML Storybook</button>
+      <button class="btn-read-aloud" id="readAloudBtn">&#x1f50a; Read Aloud Slideshow</button>
     </div>
   </div>
 </main>
+
+<!-- Slideshow Overlay -->
+<div class="slideshow-overlay" id="slideshowOverlay">
+  <button class="slideshow-close" id="slideshowClose">&times;</button>
+  <div class="slideshow-chapter-label" id="slideChapterLabel">Chapter 1</div>
+  <div class="slideshow-name" id="slideName"></div>
+  <div class="slideshow-image-wrap">
+    <img id="slideImage" src="" alt="" style="display:none;" />
+    <div class="no-image" id="slideNoImage">No image</div>
+  </div>
+  <div class="slideshow-caption" id="slideCaption">Character</div>
+  <div class="slideshow-progress" id="slideProgress"></div>
+  <div class="slideshow-narration-status" id="slideStatus">Preparing narration...</div>
+</div>
 
 <!-- Demo Overlay -->
 <div class="demo-overlay" id="demoOverlay">
@@ -551,6 +647,224 @@ document.getElementById('dismissOverlay').addEventListener('click', e => {
   e.preventDefault();
   document.getElementById('demoOverlay').classList.remove('show');
 });
+
+// ══════════════════════════════════════════════════════════════
+//  READ ALOUD SLIDESHOW — ElevenLabs TTS + image slideshow
+// ══════════════════════════════════════════════════════════════
+
+let slideshowActive = false;
+let slideshowAbort = null; // AbortController to cancel
+
+document.getElementById('readAloudBtn').addEventListener('click', startSlideshow);
+document.getElementById('slideshowClose').addEventListener('click', stopSlideshow);
+
+async function startSlideshow() {
+  const apiKey = document.getElementById('elevenKey').value.trim();
+  if (!apiKey) {
+    const errEl = document.getElementById('errorMsg');
+    errEl.textContent = '🔊 Please enter your ElevenLabs API key in Settings above.';
+    errEl.classList.add('show');
+    setTimeout(() => errEl.classList.remove('show'), 4000);
+    return;
+  }
+  if (receivedChapters.length < 3) return;
+
+  slideshowActive = true;
+  slideshowAbort = new AbortController();
+
+  const overlay = document.getElementById('slideshowOverlay');
+  overlay.classList.add('show');
+
+  // Build slide list: 2 slides per chapter (character, scene)
+  const slides = [];
+  receivedChapters.forEach((ch, i) => {
+    slides.push({
+      chapter: i + 1, name: ch.name, story: ch.story,
+      img: ch.nameImg, caption: 'Character Portrait',
+    });
+    slides.push({
+      chapter: i + 1, name: ch.name, story: ch.story,
+      img: ch.storyImg, caption: 'Scene Illustration',
+    });
+  });
+
+  // Build progress pips
+  const progressEl = document.getElementById('slideProgress');
+  progressEl.innerHTML = slides.map((_, i) =>
+    `<div class="pip" id="pip${i}"></div>`
+  ).join('');
+
+  // Narrate each chapter (one TTS call per chapter, shown across 2 slides)
+  for (let chIdx = 0; chIdx < 3; chIdx++) {
+    if (!slideshowActive) break;
+
+    const ch = receivedChapters[chIdx];
+    const slideA = chIdx * 2;     // character slide
+    const slideB = chIdx * 2 + 1; // scene slide
+
+    // Show first slide (character) immediately
+    showSlide(slides, slideA);
+    document.getElementById('slideStatus').textContent = `Generating narration for Chapter ${chIdx + 1}...`;
+
+    // Call ElevenLabs TTS
+    let audioBlob = null;
+    try {
+      audioBlob = await elevenLabsTTS(apiKey, ch.story, slideshowAbort.signal);
+    } catch (e) {
+      if (e.name === 'AbortError') break;
+      document.getElementById('slideStatus').textContent = '⚠️ TTS error: ' + e.message;
+      // Wait a few seconds on the slide then continue
+      await sleep(4000);
+      // Mark slides done
+      markPip(slideA, 'done');
+      showSlide(slides, slideB);
+      await sleep(4000);
+      markPip(slideB, 'done');
+      continue;
+    }
+
+    if (!slideshowActive || !audioBlob) break;
+
+    // Play audio; switch from character→scene slide at halfway
+    document.getElementById('slideStatus').textContent = `♪ Narrating Chapter ${chIdx + 1}...`;
+    await playAudioWithSlides(audioBlob, slides, slideA, slideB, slideshowAbort.signal);
+  }
+
+  if (slideshowActive) {
+    document.getElementById('slideStatus').textContent = '✨ Story complete!';
+    await sleep(2500);
+    stopSlideshow();
+  }
+}
+
+function stopSlideshow() {
+  slideshowActive = false;
+  if (slideshowAbort) slideshowAbort.abort();
+  document.getElementById('slideshowOverlay').classList.remove('show');
+  // Stop any playing audio
+  const existingAudio = document.querySelector('audio.tts-player');
+  if (existingAudio) { existingAudio.pause(); existingAudio.remove(); }
+}
+
+function showSlide(slides, idx) {
+  const s = slides[idx];
+  document.getElementById('slideChapterLabel').textContent = 'Chapter ' + s.chapter;
+  document.getElementById('slideName').textContent = s.name;
+  document.getElementById('slideCaption').textContent = s.caption;
+
+  const imgEl = document.getElementById('slideImage');
+  const noImg = document.getElementById('slideNoImage');
+  if (s.img) {
+    imgEl.src = s.img;
+    imgEl.alt = s.name + ' — ' + s.caption;
+    imgEl.style.display = '';
+    noImg.style.display = 'none';
+  } else {
+    imgEl.style.display = 'none';
+    noImg.style.display = '';
+  }
+
+  // Update pips
+  document.querySelectorAll('.slideshow-progress .pip').forEach((pip, i) => {
+    if (i === idx) pip.classList.add('active');
+    else pip.classList.remove('active');
+  });
+}
+
+function markPip(idx, cls) {
+  const pip = document.getElementById('pip' + idx);
+  if (pip) { pip.classList.remove('active'); pip.classList.add(cls); }
+}
+
+async function elevenLabsTTS(apiKey, text, signal) {
+  // Use a default voice (Rachel — warm narrator voice)
+  const voiceId = '21m00Tcm4TlvDq8ikWAM'; // Rachel
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+
+  // Trim text to ~1000 chars to stay within reasonable TTS limits
+  const trimmed = text.length > 1000 ? text.substring(0, 997) + '...' : text;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'xi-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      text: trimmed,
+      model_id: 'eleven_monolingual_v1',
+      voice_settings: { stability: 0.6, similarity_boost: 0.75 },
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail?.message || errData.detail || 'ElevenLabs API error ' + res.status);
+  }
+
+  return await res.blob();
+}
+
+function playAudioWithSlides(blob, slides, slideA, slideB, signal) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.className = 'tts-player';
+    document.body.appendChild(audio);
+
+    let switched = false;
+    let halfTimer = null;
+
+    // When we know the duration, schedule the mid-point slide switch
+    audio.addEventListener('loadedmetadata', () => {
+      const half = Math.max((audio.duration || 10) / 2, 3); // at least 3s per slide
+      halfTimer = setTimeout(() => {
+        if (!switched) {
+          switched = true;
+          markPip(slideA, 'done');
+          showSlide(slides, slideB);
+        }
+      }, half * 1000);
+    });
+
+    audio.addEventListener('ended', () => {
+      cleanup();
+      // If we never switched (very short audio), do it now
+      if (!switched) {
+        markPip(slideA, 'done');
+        showSlide(slides, slideB);
+      }
+      markPip(slideB, 'done');
+      resolve();
+    });
+
+    audio.addEventListener('error', () => {
+      cleanup();
+      if (!switched) { markPip(slideA, 'done'); showSlide(slides, slideB); }
+      markPip(slideB, 'done');
+      resolve();
+    });
+
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        audio.pause(); cleanup(); resolve();
+      }, { once: true });
+    }
+
+    function cleanup() {
+      if (halfTimer) clearTimeout(halfTimer);
+      URL.revokeObjectURL(url);
+      audio.remove();
+    }
+
+    audio.play().catch(() => { cleanup(); resolve(); });
+  });
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
 </script>
 </body>
 </html>
