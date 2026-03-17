@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ghost Book — Split View Storybook</title>
+  <meta name="description" content="Ghost Book — AI-powered split view storybook generator. Ghost stories, D&D adventures, and haunted kitchen tales." />
+  <meta name="theme-color" content="#7c3aed" />
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #222536;
+      --border: #2e3147; --accent: #7c3aed; --accent-dark: #6d28d9;
+      --accent2: #22d3ee; --green: #34d399; --red: #f87171;
+      --text: #e2e8f0; --muted: #94a3b8; --dim: #64748b; --radius: 12px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; display: flex; flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Header */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; background: var(--accent);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-brand { display: flex; flex-direction: column; gap: 1px; }
+    .header-business { font-size: 11px; font-weight: 600; color: rgba(255,255,255,.7); }
+    .header-title { font-size: 17px; font-weight: 800; color: #fff; }
+    .header-right { display: flex; gap: 8px; align-items: center; }
+    .back-link {
+      color: #fff; text-decoration: none; font-size: 12px; font-weight: 600;
+      background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.2);
+      border-radius: 100px; padding: 5px 12px; transition: background .15s;
+    }
+    .back-link:hover { background: rgba(0,0,0,.35); }
+    .header-badge {
+      font-size: 11px; font-weight: 600; color: #fff;
+      background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
+      border-radius: 100px; padding: 4px 10px;
+    }
+    .status-pills { display: flex; gap: 6px; }
+    .status {
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(0,0,0,.25); border-radius: 20px;
+      padding: 4px 10px; font-size: 11px; color: rgba(255,255,255,.85);
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+    }
+    .dot.waiting { background: var(--dim); animation: pulse 1.5s ease infinite; }
+    .dot.ok { background: var(--green); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+    /* Launch screen */
+    .launch {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; padding: 40px 24px; text-align: center;
+    }
+    .launch-icon { font-size: 56px; }
+    .launch-title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+    .launch-desc {
+      font-size: 14px; color: var(--muted); max-width: 480px; line-height: 1.7;
+    }
+    .btn-launch {
+      padding: 14px 44px; background: var(--accent); color: #fff;
+      border: none; border-radius: 10px; font-size: 16px; font-weight: 700;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-launch:hover { filter: brightness(1.1); transform: scale(1.02); }
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+    .btn-secondary {
+      padding: 8px 18px; background: var(--surface); color: var(--muted);
+      border: 1px solid var(--border); border-radius: 8px; font-size: 12px;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-secondary:hover { color: var(--text); border-color: var(--accent); }
+
+    .features {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+      max-width: 520px; margin-top: 12px;
+    }
+    .feature {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 10px; text-align: center;
+    }
+    .feature-icon { font-size: 24px; margin-bottom: 4px; }
+    .feature-text { font-size: 11px; color: var(--muted); font-weight: 600; }
+    @media (max-width: 500px) { .features { grid-template-columns: 1fr; } }
+
+    /* Split panels */
+    .panels {
+      flex: 1; display: flex; gap: 2px; background: var(--border);
+      min-height: 0;
+    }
+    .panel {
+      flex: 1; display: flex; flex-direction: column;
+      background: var(--bg); min-width: 0;
+    }
+    .panel-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 12px; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px; font-weight: 600;
+    }
+    .panel-bar .label { color: var(--dim); }
+    .panel-bar .name { color: var(--text); }
+    .panel-frame {
+      flex: 1; border: none; width: 100%; min-height: 0;
+    }
+    .hidden { display: none !important; }
+
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 20px; font-size: 13px;
+      color: var(--text); opacity: 0; transition: opacity .3s;
+      pointer-events: none; max-width: 360px; text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <span class="header-business">The Build Company</span>
+    <span class="header-title">Ghost Book</span>
+  </div>
+  <div class="header-right">
+    <div class="status-pills" id="statusPills" style="display:none;">
+      <div class="status">
+        <div class="dot waiting" id="dotLeft"></div>
+        <span>Story Forge</span>
+      </div>
+      <div class="status">
+        <div class="dot waiting" id="dotRight"></div>
+        <span>Gallery</span>
+      </div>
+    </div>
+    <a href="/portal/" class="back-link">&larr; My Apps</a>
+    <span class="header-badge">&#x1f512; Secure App</span>
+  </div>
+</header>
+
+<!-- Launch screen -->
+<div class="launch" id="launchScreen">
+  <div class="launch-icon">&#x1f47b;&#x1f4d6;</div>
+  <div class="launch-title">Ghost Book</div>
+  <div class="launch-desc">
+    A split-view storybook generator. The left panel forges character names and short
+    ghost stories — three chapters in all. The right panel illustrates each chapter
+    with AI-generated art, then exports the whole thing as a standalone HTML storybook.
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">&#x1f3b2;</div>
+      <div class="feature-text">3 Chapters<br>Name + Story</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#x1f3a8;</div>
+      <div class="feature-text">AI Illustrations<br>Per Chapter</div>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">&#x1f4da;</div>
+      <div class="feature-text">Export HTML<br>Storybook</div>
+    </div>
+  </div>
+
+  <button class="btn-launch" id="btnSplit">&#x26a1; Launch Split View</button>
+  <div class="btn-row">
+    <button class="btn-secondary" id="btnTabs">Open in separate tabs</button>
+  </div>
+</div>
+
+<!-- Split panels (hidden until launch) -->
+<div class="panels hidden" id="splitPanels">
+  <div class="panel">
+    <div class="panel-bar">
+      <span class="label">Left</span>
+      <span class="name">Story Forge</span>
+    </div>
+    <iframe class="panel-frame" id="frameLeft"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+      allow="clipboard-write"></iframe>
+  </div>
+  <div class="panel">
+    <div class="panel-bar">
+      <span class="label">Right</span>
+      <span class="name">Gallery</span>
+    </div>
+    <iframe class="panel-frame" id="frameRight"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+      allow="clipboard-write"></iframe>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  // Relative paths for same-origin iframe loading
+  const URL_LEFT  = 'story-forge.html';
+  const URL_RIGHT = 'gallery.html';
+
+  const launchScreen = document.getElementById('launchScreen');
+  const splitPanels  = document.getElementById('splitPanels');
+  const frameLeft    = document.getElementById('frameLeft');
+  const frameRight   = document.getElementById('frameRight');
+  const dotLeft      = document.getElementById('dotLeft');
+  const dotRight     = document.getElementById('dotRight');
+  const statusPills  = document.getElementById('statusPills');
+
+  // ── Launch Split View ──
+  document.getElementById('btnSplit').addEventListener('click', () => {
+    launchScreen.classList.add('hidden');
+    splitPanels.classList.remove('hidden');
+    statusPills.style.display = '';
+
+    frameLeft.src = URL_LEFT;
+    frameRight.src = URL_RIGHT;
+
+    // Mark loaded after a beat
+    frameLeft.addEventListener('load', () => {
+      dotLeft.classList.remove('waiting');
+      dotLeft.classList.add('ok');
+    });
+    frameRight.addEventListener('load', () => {
+      dotRight.classList.remove('waiting');
+      dotRight.classList.add('ok');
+    });
+  });
+
+  // ── Open in Tabs ──
+  document.getElementById('btnTabs').addEventListener('click', () => {
+    window.open(URL_LEFT, '_blank');
+    window.open(URL_RIGHT, '_blank');
+    showToast('Opened both apps in new tabs. They communicate via BroadcastChannel.');
+  });
+
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+  }
+
+  // ── Service Worker ──
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+})();
+</script>
+</body>
+</html>
