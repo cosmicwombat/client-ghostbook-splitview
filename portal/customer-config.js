@@ -61,6 +61,14 @@ const CUSTOMER = {
       icon:        "📱",
       status:      "active",
       launched:    "March 2026",
+    },
+    {
+      name:        "Ark Station",
+      description: "",
+      url:         "https://arkstation.appsforhire.app",
+      icon:        "📱",
+      status:      "active",
+      launched:    "March 2026",
     }
   ]
 };
