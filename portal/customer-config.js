@@ -69,6 +69,14 @@ const CUSTOMER = {
       icon:        "📱",
       status:      "active",
       launched:    "March 2026",
+    },
+    {
+      name:        "The Holy Beastiary",
+      description: "",
+      url:         "https://holybeastiary.appsforhire.app",
+      icon:        "📱",
+      status:      "active",
+      launched:    "March 2026",
     }
   ]
 };
